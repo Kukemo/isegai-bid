@@ -1,27 +1,18 @@
 const Database = require("better-sqlite3");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
 
-// ==============================
-// DATABASE LOCATION
-// ==============================
+// Railway writable directory
+const DATA_DIR = "/data";
 
-// Railway akan memberikan mount path untuk volume
-const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, "data");
-
-// pastikan folder database ada
+// buat folder jika belum ada
 if (!fs.existsSync(DATA_DIR)) {
-fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// lokasi file database
-const dbPath = process.env.DB_PATH || path.join(DATA_DIR, "guild.db");
+const dbPath = path.join(DATA_DIR, "guild.db");
 
-console.log("Using SQLite database at:", dbPath);
-
-// ==============================
-// CONNECT DATABASE
-// ==============================
+console.log("SQLite path:", dbPath);
 
 const db = new Database(dbPath);
 
@@ -29,82 +20,68 @@ const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 db.pragma("busy_timeout = 5000");
 
-// ==============================
-// INIT DATABASE SCHEMA
-// ==============================
+// =======================
+// SCHEMA
+// =======================
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS members (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-nickname TEXT NOT NULL UNIQUE,
-points_total INTEGER NOT NULL DEFAULT 0
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nickname TEXT NOT NULL UNIQUE,
+  points_total INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS items (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-name TEXT NOT NULL UNIQUE,
-status TEXT NOT NULL DEFAULT 'OPEN',
-created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS bids (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-item_id INTEGER NOT NULL,
-member_id INTEGER NOT NULL,
-amount INTEGER NOT NULL,
-created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id INTEGER NOT NULL,
+  member_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS holds (
-item_id INTEGER PRIMARY KEY,
-member_id INTEGER NOT NULL,
-amount INTEGER NOT NULL,
-created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  item_id INTEGER PRIMARY KEY,
+  member_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-token TEXT PRIMARY KEY,
-member_id INTEGER NOT NULL,
-expires_at TEXT NOT NULL,
-created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  token TEXT PRIMARY KEY,
+  member_id INTEGER NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS finals (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-item_id INTEGER NOT NULL UNIQUE,
-winner_member_id INTEGER NOT NULL,
-amount INTEGER NOT NULL,
-finalized_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  item_id INTEGER NOT NULL UNIQUE,
+  winner_member_id INTEGER NOT NULL,
+  amount INTEGER NOT NULL,
+  finalized_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS settings (
-key TEXT PRIMARY KEY,
-value TEXT NOT NULL
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO settings(key, value)
-VALUES ('bid_deadline_utc', '');
+INSERT OR IGNORE INTO settings(key,value)
+VALUES ('bid_deadline_utc','');
 `);
 
-// ==============================
-// MIGRATION (jika DB lama)
-// ==============================
-
-try {
-db.exec("ALTER TABLE holds ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))");
-} catch (e) {
-// kolom sudah ada
-}
-
-// ==============================
-// OPTIONAL SEED DATA
-// ==============================
-
-const seedMember = db.prepare(`INSERT OR IGNORE INTO members(nickname, points_total)
-VALUES (?, ?)`);
+// seed optional
+const seedMember = db.prepare(
+  "INSERT OR IGNORE INTO members(nickname, points_total) VALUES(?, ?)"
+);
 
 ["Lucier"].forEach((n, i) => seedMember.run(n, 160 + i * 20));
-
-// ==============================
 
 module.exports = db;
